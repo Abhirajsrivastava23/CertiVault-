@@ -1,16 +1,67 @@
 import Razorpay from 'razorpay';
 
-export const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
-export const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+export interface RazorpayCredentials {
+  keyId: string;
+  keySecret: string;
+  isConfigured: boolean;
+}
 
-export const isRazorpayConfigured = Boolean(RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET);
+/**
+ * Safely sanitizes environment variable strings by trimming whitespace and removing wrapping quotes
+ */
+export function cleanEnvVar(val?: string): string {
+  if (!val) return '';
+  return val.trim().replace(/^["']|["']$/g, '').trim();
+}
 
-export const razorpayInstance = isRazorpayConfigured
-  ? new Razorpay({
-      key_id: RAZORPAY_KEY_ID!,
-      key_secret: RAZORPAY_KEY_SECRET!,
-    })
-  : null;
+/**
+ * Resolves Razorpay credentials dynamically from environment variables
+ */
+export function getRazorpayCredentials(): RazorpayCredentials {
+  const keyId = cleanEnvVar(
+    process.env.RAZORPAY_KEY_ID ||
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+  );
+
+  const keySecret = cleanEnvVar(process.env.RAZORPAY_KEY_SECRET);
+
+  const isConfigured = Boolean(
+    keyId &&
+    keySecret &&
+    !keyId.includes('MOCK') &&
+    !keyId.includes('demo') &&
+    !keySecret.includes('your_razorpay') &&
+    keyId.startsWith('rzp_')
+  );
+
+  return { keyId, keySecret, isConfigured };
+}
+
+export const RAZORPAY_KEY_ID = cleanEnvVar(
+  process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID
+);
+export const RAZORPAY_KEY_SECRET = cleanEnvVar(process.env.RAZORPAY_KEY_SECRET);
+export const isRazorpayConfigured = getRazorpayCredentials().isConfigured;
+
+/**
+ * Returns an authenticated Razorpay SDK instance, or null if credentials are not configured
+ */
+export function getRazorpayClient(): Razorpay | null {
+  const { keyId, keySecret, isConfigured } = getRazorpayCredentials();
+  if (!isConfigured) return null;
+
+  try {
+    return new Razorpay({
+      key_id: keyId,
+      key_secret: keySecret,
+    });
+  } catch (err) {
+    console.error('[Razorpay Client Init Error]:', err);
+    return null;
+  }
+}
+
+export const razorpayInstance = getRazorpayClient();
 
 export interface RazorpayOrderOptions {
   amount: number; // in paise
@@ -32,10 +83,12 @@ export interface RazorpayCreatedOrder {
  * Creates an order on Razorpay or falls back to an authentic sandbox order simulation
  */
 export async function createRazorpayOrder(options: RazorpayOrderOptions): Promise<RazorpayCreatedOrder> {
-  if (razorpayInstance) {
+  const client = getRazorpayClient();
+
+  if (client) {
     try {
-      const order = await razorpayInstance.orders.create({
-        amount: options.amount,
+      const order = await client.orders.create({
+        amount: Math.round(options.amount),
         currency: options.currency || 'INR',
         receipt: options.receipt,
         notes: options.notes,
@@ -45,24 +98,25 @@ export async function createRazorpayOrder(options: RazorpayOrderOptions): Promis
         id: order.id,
         amount: Number(order.amount),
         currency: order.currency,
-        receipt: order.receipt || options.receipt,
+        receipt: (order.receipt as string) || options.receipt,
         status: order.status,
         isSimulated: false,
       };
-    } catch (err) {
-      console.error('Razorpay API error, falling back to sandbox mode:', err);
+    } catch (err: any) {
+      console.error('[Razorpay Order API Failed]:', err?.error?.description || err?.message || err);
+      // In live/test mode, if credentials are configured, re-throw so user is alerted rather than masking failure
+      throw new Error(`Razorpay gateway order failed: ${err?.error?.description || err?.message || 'Unauthorized or network error'}`);
     }
   }
 
-  // Realistic Sandbox / Local Simulation Order
-  const simulatedId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  // Realistic Sandbox / Local Simulation Order when credentials are not configured
+  const simulatedId = `order_sim_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   return {
     id: simulatedId,
-    amount: options.amount,
+    amount: Math.round(options.amount),
     currency: 'INR',
     receipt: options.receipt,
     status: 'created',
     isSimulated: true,
   };
 }
-

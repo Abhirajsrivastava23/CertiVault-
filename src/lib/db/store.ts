@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { 
   Certification, 
   Provider, 
@@ -321,9 +322,13 @@ class DatabaseStore {
     const taxAmount = Math.round(subtotal * 0.18); // 18% GST standard in India
     const totalAmount = subtotal + taxAmount;
 
-    const orderId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const orderId = typeof crypto.randomUUID === 'function' 
+      ? crypto.randomUUID() 
+      : `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const orderNumber = generateOrderNumber();
-    const orderItemId = `item_${Date.now()}`;
+    const orderItemId = typeof crypto.randomUUID === 'function' 
+      ? crypto.randomUUID() 
+      : `item_${Date.now()}`;
 
     const newOrder: Order = {
       id: orderId,
@@ -360,6 +365,42 @@ class DatabaseStore {
     return this.orders.find(o => o.id === orderId || o.orderNumber === orderId);
   }
 
+  public getOrderByRazorpayOrderId(razorpayOrderId: string): Order | undefined {
+    return this.orders.find(o => o.razorpayOrderId === razorpayOrderId);
+  }
+
+  public restoreOrderFromSupabase(sbOrder: any): Order {
+    const existing = this.orders.find(o => o.id === sbOrder.id);
+    if (existing) {
+      existing.status = sbOrder.status;
+      existing.razorpayOrderId = sbOrder.razorpay_order_id || existing.razorpayOrderId;
+      existing.razorpayPaymentId = sbOrder.razorpay_payment_id || existing.razorpayPaymentId;
+      existing.paymentMethod = sbOrder.payment_method || existing.paymentMethod;
+      return existing;
+    }
+
+    const restoredOrder: Order = {
+      id: sbOrder.id,
+      orderNumber: sbOrder.order_number,
+      userId: sbOrder.user_id,
+      customerName: sbOrder.customer_name,
+      customerEmail: sbOrder.customer_email,
+      customerPhone: sbOrder.customer_phone,
+      totalAmountInr: Number(sbOrder.total_amount_inr),
+      taxAmountInr: Number(sbOrder.tax_amount_inr || 0),
+      status: sbOrder.status,
+      razorpayOrderId: sbOrder.razorpay_order_id,
+      razorpayPaymentId: sbOrder.razorpay_payment_id,
+      paymentMethod: sbOrder.payment_method,
+      createdAt: sbOrder.created_at,
+      updatedAt: sbOrder.updated_at,
+      items: [],
+    };
+
+    this.orders.unshift(restoredOrder);
+    return restoredOrder;
+  }
+
   public getOrdersByUserId(userId: string): Order[] {
     return this.orders.filter(o => o.userId === userId);
   }
@@ -372,6 +413,11 @@ class DatabaseStore {
   ): Order | undefined {
     const order = this.orders.find(o => o.id === orderId);
     if (!order) return undefined;
+
+    // Prevent marking already fulfilled/paid orders back to failed/pending
+    if ((order.status === 'paid' || order.status === 'fulfilled') && (status === 'failed' || status === 'pending')) {
+      return order;
+    }
 
     order.status = status;
     if (paymentId) order.razorpayPaymentId = paymentId;

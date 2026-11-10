@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { dbStore } from '@/lib/db/store';
-import { createRazorpayOrder, RAZORPAY_KEY_ID } from '@/lib/payments/razorpay';
+import { createRazorpayOrder, getRazorpayCredentials } from '@/lib/payments/razorpay';
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/db/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,11 @@ const createOrderSchema = z.object({
   customerPhone: z.string().min(8, 'Phone number must be at least 8 digits'),
   userId: z.string().optional(),
 });
+
+function isValidUuid(id?: string): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,9 +38,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { certificationId, quantity, customerName, customerEmail, customerPhone } = validated.data;
-    const effectiveUserId = validated.data.userId || 'usr_demo_882910';
+    const effectiveUserId = validated.data.userId && isValidUuid(validated.data.userId)
+      ? validated.data.userId
+      : crypto.randomUUID();
 
-    // 1. Fetch certification from catalog and verify pricing
+    // 1. Fetch certification from catalog and verify server pricing
     const cert = dbStore.getCertificationById(certificationId);
     if (!cert) {
       return NextResponse.json(
@@ -62,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     const internalOrder = orderResult.order;
 
-    // 3. Create payment order via Razorpay API (with sandbox fallback if keys are pending)
+    // 3. Create payment order via Razorpay API (with sanitized credentials)
     const razorpayOrder = await createRazorpayOrder({
       amount: internalOrder.totalAmountInr,
       currency: 'INR',
@@ -74,15 +82,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update internal order with razorpayOrderId
+    // Link the server-generated Razorpay order ID to our internal order
     internalOrder.razorpayOrderId = razorpayOrder.id;
 
-    // 4. Record order in Supabase if configured
+    // 4. Record pending order in Supabase PostgreSQL if configured
     if (isSupabaseConfigured && supabaseAdmin) {
       try {
         await supabaseAdmin.from('orders').upsert({
           id: internalOrder.id,
           order_number: internalOrder.orderNumber,
+          user_id: effectiveUserId,
           customer_email: customerEmail,
           customer_phone: customerPhone,
           customer_name: customerName,
@@ -94,9 +103,11 @@ export async function POST(request: NextRequest) {
           updated_at: internalOrder.updatedAt,
         }, { onConflict: 'id' });
       } catch (sbErr) {
-        console.warn('Supabase order creation sync note (will proceed with store):', sbErr);
+        console.warn('[Supabase Order Pending Sync Note]:', sbErr);
       }
     }
+
+    const { keyId } = getRazorpayCredentials();
 
     return NextResponse.json({
       success: true,
@@ -105,7 +116,7 @@ export async function POST(request: NextRequest) {
       amountInPaise: internalOrder.totalAmountInr,
       currency: 'INR',
       razorpayOrderId: razorpayOrder.id,
-      razorpayKeyId: RAZORPAY_KEY_ID || 'rzp_test_MOCK_DEMO_KEY',
+      razorpayKeyId: keyId || 'rzp_test_MOCK_DEMO_KEY',
       isSimulated: razorpayOrder.isSimulated ?? false,
       certification: {
         name: cert.name,
@@ -113,10 +124,13 @@ export async function POST(request: NextRequest) {
         provider: cert.providerName,
       },
     });
-  } catch (error) {
-    console.error('Error in /api/checkout/create-order:', error);
+  } catch (error: any) {
+    console.error('[Error in /api/checkout/create-order]:', error);
     return NextResponse.json(
-      { success: false, error: 'Internal server error processing checkout' },
+      { 
+        success: false, 
+        error: error?.message || 'Internal server error processing checkout' 
+      },
       { status: 500 }
     );
   }
