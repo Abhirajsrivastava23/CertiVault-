@@ -1,73 +1,87 @@
 import React from 'react';
 import Link from 'next/link';
-import { AlertCircle, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function RefundPolicyPage() {
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
-      
-      <div className="space-y-3">
-        <span className="text-xs font-semibold px-3 py-1 rounded-full bg-primary/20 text-primary-light border border-primary/30">
-          Commercial Terms
-        </span>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-          Refund & Cancellation Policy
-        </h1>
-        <p className="text-xs text-gray-400">
-          Effective Date: November 8, 2026 • CertiVault Technologies Pvt. Ltd.
-        </p>
-      </div>
-
-      <div className="glass-card rounded-3xl p-8 sm:p-12 border border-[#1F2B47] space-y-8 text-xs sm:text-sm text-gray-300 leading-relaxed">
+    <div className="py-12 bg-background min-h-screen">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
         
-        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 space-y-2">
-          <div className="flex items-center gap-2 font-bold text-white text-sm">
-            <AlertCircle className="w-5 h-5 text-amber-400" />
-            Standard Non-Refundability of Intangible Digital Vouchers
-          </div>
-          <p className="leading-relaxed">
-            Due to the nature of cryptographic, single-use examination vouchers which cannot be re-inventoried once allocated or exposed, <strong>all sales are final once an unmasked voucher code has been revealed or accessed in your dashboard</strong>, in accordance with official testing sponsor policies.
+        {/* Header */}
+        <div className="space-y-3 border-b border-surface-border pb-6">
+          <Link href="/" className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors mb-2">
+            <ArrowLeft className="h-4 w-4" />
+            <span>Return to Homepage</span>
+          </Link>
+          <span className="text-xs font-semibold uppercase tracking-wider text-primary-light">
+            Customer Guarantee
+          </span>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+            Refund & Cancellation Policy
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Last Updated: November 2026 • Governing all certification voucher orders.
           </p>
         </div>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-white">1. Eligible Circumstances for Full Refund</h2>
-          <p>CertiVault will honor a 100% refund under the following conditions:</p>
-          <ul className="list-disc pl-5 space-y-1.5 text-xs text-gray-400">
-            <li><strong>Non-Fulfillment:</strong> If a technical failure or supplier inventory outage prevents allocation of your purchased voucher within 24 hours of successful payment.</li>
-            <li><strong>Duplicate Charges:</strong> In the event of an inadvertent double deduction by the payment gateway for a single order.</li>
-            <li><strong>Defective Code:</strong> If a voucher code is confirmed by the testing sponsor (Pearson VUE, Webassessor) as invalid or previously consumed prior to your purchase timestamp. Claims must be submitted within 7 days of purchase and include the official Pearson VUE error screenshot.</li>
-          </ul>
-        </section>
+        {/* Content */}
+        <div className="space-y-8 text-sm text-slate-300 leading-relaxed">
+          
+          <div className="p-4 rounded-xl bg-surface-card border border-surface-border space-y-2">
+            <div className="flex items-center gap-2 text-white font-bold text-sm">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              <span>100% Validity Guarantee</span>
+            </div>
+            <p className="text-xs text-slate-300">
+              CertiVault warrants that every voucher code sold on our platform is authentic, active, and redeemable on the designated testing partner’s official registration portal (e.g. Pearson VUE, PSI, or Webassessor).
+            </p>
+          </div>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-white">2. Ineligible Circumstances</h2>
-          <p>Refunds and cancellations will not be granted under the following circumstances:</p>
-          <ul className="list-disc pl-5 space-y-1.5 text-xs text-gray-400">
-            <li>Change of mind after payment has been verified and voucher has been revealed.</li>
-            <li>Purchasing the incorrect exam code or level (e.g. purchasing AZ-900 instead of AZ-104).</li>
-            <li>Failure to sit for an exam before the clearly stated expiration date.</li>
-            <li>Failure to pass an examination (vouchers cover exam sitting fees and do not guarantee passing).</li>
-            <li>Purchasing a voucher for an ineligible geographic test region due to failure to read product specifications.</li>
-          </ul>
-        </section>
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-white">1. Nature of Digital Vouchers</h2>
+            <p>
+              IT certification vouchers are single-use, confidential digital license keys. Once a voucher code has been revealed or viewed in plaintext, it functions as bearer tender and cannot be retracted, canceled, or resold to another candidate.
+            </p>
+          </section>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-white">3. Refund Processing Timeline</h2>
-          <p>
-            Approved refunds are credited back to the original payment instrument (UPI, Debit/Credit Card, or Net Banking bank account) through Razorpay within 5 to 7 standard business days, in compliance with RBI guidelines.
-          </p>
-        </section>
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-white">2. Eligible Refund Conditions</h2>
+            <p>A full refund or replacement will be provided under the following verified conditions:</p>
+            <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-slate-300">
+              <li>
+                <strong>Unrevealed Code Cancellation:</strong> If your purchased voucher has NOT been revealed in your dashboard and you request cancellation within 48 hours of purchase.
+              </li>
+              <li>
+                <strong>Technical Rejection:</strong> If a voucher code is rejected by the official testing center portal upon first attempt and our support desk confirms an authorization discrepancy.
+              </li>
+              <li>
+                <strong>Duplicate Billing:</strong> In the event of duplicate charges resulting from payment gateway anomalies.
+              </li>
+            </ul>
+          </section>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-white">4. Filing a Refund Request</h2>
-          <p>
-            To submit a claim, please open a ticket at <Link href="/support" className="text-primary-light underline">certivault.in/support</Link> with subject &quot;Refund Request: [Order Number]&quot; and provide your transaction receipt.
-          </p>
-        </section>
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-white">3. Non-Refundable Scenarios</h2>
+            <p>Refunds cannot be issued for:</p>
+            <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-slate-300">
+              <li>Vouchers where the code has already been revealed in your customer dashboard vault.</li>
+              <li>Vouchers that have expired after the 12-month validity window due to candidate inaction.</li>
+              <li>Failure to attend a scheduled exam appointment (&ldquo;No-show&rdquo;).</li>
+              <li>Unsuccessful exam attempts (failing the test does not qualify for a voucher refund or retest waiver).</li>
+              <li>Candidate changing their career pathway after revealing the voucher code.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-white">4. Refund Processing Timeline</h2>
+            <p>
+              Approved refunds are credited directly back to the original source payment method (UPI account, bank account, or card) via Razorpay within 5 to 7 business days, in compliance with Reserve Bank of India (RBI) guidelines.
+            </p>
+          </section>
+
+        </div>
 
       </div>
-
     </div>
   );
 }

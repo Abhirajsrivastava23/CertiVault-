@@ -1,0 +1,11 @@
+certificationId,voucherCode,expiryDate,region,redemptionInstructions,supplierReference
+cert-ms-az900,CV-AZ900-BATCH2-9011,2027-12-31,India / Global,Redeem at checkout on Pearson VUE via Microsoft Learn,PO-MSFT-2026-Q1
+cert-ms-az900,CV-AZ900-BATCH2-9012,2027-12-31,India / Global,Redeem at checkout on Pearson VUE via Microsoft Learn,PO-MSFT-2026-Q1
+cert-ms-az104,CV-AZ104-BATCH2-4421,2027-12-31,India / Global,Redeem at checkout on Pearson VUE via Microsoft Learn,PO-MSFT-2026-Q1
+cert-aws-saa,CV-AWSSAA-BATCH2-8812,2027-12-31,India / Global,Redeem at checkout on AWS Training and Certification Pearson VUE portal,PO-AWS-2026-Q1
+cert-aws-saa,CV-AWSSAA-BATCH2-8813,2027-12-31,India / Global,Redeem at checkout on AWS Training and Certification Pearson VUE portal,PO-AWS-2026-Q1
+cert-gcp-ace,CV-GCPACE-BATCH2-3321,2027-12-31,India / Global,Enter in Coupon/Voucher box on Google Cloud Webassessor checkout,PO-GCP-2026-Q1
+cert-cisco-ccna,CV-CCNA-BATCH2-7711,2027-12-31,India / Global,Apply voucher at Pearson VUE Cisco exam registration checkout,PO-CISCO-2026-Q1
+cert-comptia-sec,CV-COMPSEC-BATCH2-1102,2027-12-31,India / Global,Enter voucher on CompTIA / Pearson VUE exam checkout screen,PO-COMP-2026-Q1
+cert-lf-cka,CV-CKA-BATCH2-5501,2027-12-31,India / Global,Apply coupon at Linux Foundation training portal checkout,PO-LF-2026-Q1
+

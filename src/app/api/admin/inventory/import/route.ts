@@ -1,125 +1,107 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Papa from 'papaparse';
-import { CERTIFICATIONS } from '@/lib/data/certifications';
-import { store, PrivateVoucher } from '@/lib/services/store';
+import { dbStore } from '@/lib/db/store';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // Check Admin API Key or Authorization header
-    const authHeader = req.headers.get('authorization') || req.headers.get('x-admin-key');
-    const adminKey = process.env.ADMIN_API_KEY || 'cv_admin_supersecret_key_2026';
+    const contentType = request.headers.get('content-type') || '';
+    let itemsToImport: Array<{
+      certificationId: string;
+      voucherCode: string;
+      expiryDate: string;
+      region: string;
+      redemptionInstructions: string;
+      supplierReference?: string;
+    }> = [];
 
-    const providedKey = authHeader?.replace(/^Bearer\s+/i, '');
-    if (!providedKey || providedKey !== adminKey) {
-      return NextResponse.json({ error: 'Unauthorized: Invalid or missing Admin API Key' }, { status: 401 });
-    }
-
-    const contentType = req.headers.get('content-type') || '';
-    let rows: any[] = [];
-
-    if (contentType.includes('text/csv') || contentType.includes('multipart/form-data')) {
-      const text = await req.text();
-      const parsed = Papa.parse(text, {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'),
-      });
-      rows = parsed.data;
+    if (contentType.includes('application/json')) {
+      const body = await request.json();
+      if (Array.isArray(body)) {
+        itemsToImport = body;
+      } else if (body.items && Array.isArray(body.items)) {
+        itemsToImport = body.items;
+      } else if (body.csv) {
+        itemsToImport = parseCsvVouchers(body.csv);
+      }
+    } else if (contentType.includes('text/csv') || contentType.includes('multipart/form-data')) {
+      const text = await request.text();
+      itemsToImport = parseCsvVouchers(text);
     } else {
-      const json = await req.json();
-      rows = Array.isArray(json) ? json : json.vouchers || [];
+      const text = await request.text();
+      itemsToImport = parseCsvVouchers(text);
     }
 
-    if (!rows.length) {
-      return NextResponse.json({ error: 'No inventory rows found to import' }, { status: 400 });
-    }
-
-    const validationErrors: string[] = [];
-    const validBatch: Omit<PrivateVoucher, 'id' | 'status' | 'revealCount'>[] = [];
-    const existingInventory = store.getInventory();
-    const existingCodes = new Set(existingInventory.map(v => v.voucherCode.trim()));
-
-    const today = new Date().toISOString().split('T')[0];
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNum = i + 1;
-
-      // Extract field variations from CSV or JSON
-      const certId = (row.certification_id || row.certificationid || row.cert_id || row.exam_code || '').trim();
-      const voucherCode = (row.voucher_code || row.vouchercode || row.code || '').trim();
-      const expiryDate = (row.expiry_date || row.expirydate || row.expiry || '').trim();
-      const region = (row.region || 'India / South Asia').trim();
-      const redemptionInstructions = (
-        row.redemption_instructions ||
-        row.redemptioninstructions ||
-        row.instructions ||
-        'Apply voucher code during Pearson VUE or test center checkout.'
-      ).trim();
-      const supplierReference = (row.supplier_reference || row.supplierreference || 'BATCH-MANUAL').trim();
-
-      // 1. Check required fields
-      if (!certId || !voucherCode || !expiryDate) {
-        validationErrors.push(`Row ${rowNum}: Missing required fields (certification_id, voucher_code, or expiry_date).`);
-        continue;
-      }
-
-      // 2. Validate certification mapping (by ID, exam code, or slug)
-      const matchedCert = CERTIFICATIONS.find(
-        c =>
-          c.id.toLowerCase() === certId.toLowerCase() ||
-          c.examCode.toLowerCase() === certId.toLowerCase() ||
-          c.slug.toLowerCase() === certId.toLowerCase()
+    if (!itemsToImport.length) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'No voucher records parsed. Please provide JSON array or CSV data with columns: certificationId, voucherCode, expiryDate, region, redemptionInstructions, supplierReference.' 
+        },
+        { status: 400 }
       );
-
-      if (!matchedCert) {
-        validationErrors.push(`Row ${rowNum}: Certification "${certId}" does not exist in catalog.`);
-        continue;
-      }
-
-      // 3. Detect duplicate codes
-      if (existingCodes.has(voucherCode)) {
-        validationErrors.push(`Row ${rowNum}: Duplicate voucher code "${voucherCode}" already exists.`);
-        continue;
-      }
-
-      // 4. Validate expiry
-      if (expiryDate <= today) {
-        validationErrors.push(`Row ${rowNum}: Voucher expiry date "${expiryDate}" is in the past.`);
-        continue;
-      }
-
-      // Add to verified set
-      existingCodes.add(voucherCode);
-      validBatch.push({
-        certificationId: matchedCert.id,
-        certificationSlug: matchedCert.slug,
-        voucherCode,
-        expiryDate,
-        region,
-        redemptionInstructions,
-        supplierReference,
-      });
     }
 
-    if (validBatch.length === 0) {
-      return NextResponse.json({
-        success: false,
-        importedCount: 0,
-        errors: validationErrors,
-      }, { status: 400 });
-    }
-
-    const { added, errors } = store.importVouchers(validBatch);
+    const importResult = dbStore.importVoucherBatch(itemsToImport);
 
     return NextResponse.json({
-      success: true,
-      importedCount: added,
-      failedCount: validationErrors.length + errors.length,
-      errors: [...validationErrors, ...errors],
+      success: importResult.success,
+      importedCount: importResult.insertedCount,
+      failedCount: importResult.errors.length,
+      errors: importResult.errors,
+      message: `Successfully imported ${importResult.insertedCount} vouchers into private inventory.`,
     });
-  } catch (err: any) {
-    console.error('Inventory import error:', err);
-    return NextResponse.json({ error: 'Failed to process inventory import' }, { status: 500 });
+  } catch (error) {
+    console.error('Error in /api/admin/inventory/import:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error processing voucher import' },
+      { status: 500 }
+    );
   }
+}
+
+function parseCsvVouchers(csvContent: string) {
+  const lines = csvContent.split(/\r?\n/).filter(line => line.trim().length > 0);
+  if (lines.length <= 1) return [];
+
+  // Header line
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const certIdIndex = header.findIndex(h => h.includes('cert') || h.includes('exam'));
+  const codeIndex = header.findIndex(h => h.includes('code') || h.includes('voucher'));
+  const expiryIndex = header.findIndex(h => h.includes('expir') || h.includes('date'));
+  const regionIndex = header.findIndex(h => h.includes('region') || h.includes('country'));
+  const instructIndex = header.findIndex(h => h.includes('instruct') || h.includes('redemption'));
+  const supplierIndex = header.findIndex(h => h.includes('supplier') || h.includes('reference') || h.includes('po'));
+
+  const items: Array<{
+    certificationId: string;
+    voucherCode: string;
+    expiryDate: string;
+    region: string;
+    redemptionInstructions: string;
+    supplierReference?: string;
+  }> = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const rawLine = lines[i];
+    // Basic CSV token parser handling quotes
+    const cols = rawLine.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g, ''));
+    if (cols.length < 3) continue;
+
+    const certId = certIdIndex >= 0 ? cols[certIdIndex] : cols[0];
+    const voucherCode = codeIndex >= 0 ? cols[codeIndex] : cols[1];
+    const expiryDate = expiryIndex >= 0 ? cols[expiryIndex] : cols[2];
+    const region = regionIndex >= 0 && cols[regionIndex] ? cols[regionIndex] : 'India / Global';
+    const redemptionInstructions = instructIndex >= 0 && cols[instructIndex] ? cols[instructIndex] : 'Redeem via official exam testing center checkout.';
+    const supplierReference = supplierIndex >= 0 ? cols[supplierIndex] : 'CSV-BATCH';
+
+    items.push({
+      certificationId: certId,
+      voucherCode,
+      expiryDate,
+      region,
+      redemptionInstructions,
+      supplierReference,
+    });
+  }
+
+  return items;
 }

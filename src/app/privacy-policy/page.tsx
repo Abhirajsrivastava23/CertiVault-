@@ -1,77 +1,80 @@
 import React from 'react';
 import Link from 'next/link';
+import { ArrowLeft, Lock, ShieldCheck } from 'lucide-react';
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
-      
-      <div className="space-y-3">
-        <span className="text-xs font-semibold px-3 py-1 rounded-full bg-primary/20 text-primary-light border border-primary/30">
-          Privacy Notice
-        </span>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-          Privacy Policy
-        </h1>
-        <p className="text-xs text-gray-400">
-          Last Updated: November 8, 2026 • CertiVault Technologies Pvt. Ltd.
-        </p>
-      </div>
-
-      <div className="glass-card rounded-3xl p-8 sm:p-12 border border-[#1F2B47] space-y-8 text-xs sm:text-sm text-gray-300 leading-relaxed">
+    <div className="py-12 bg-background min-h-screen">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
         
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-white">1. Information We Collect</h2>
-          <p>
-            When you register an account, make a purchase, or submit a candidate support inquiry on CertiVault, we collect:
+        {/* Header */}
+        <div className="space-y-3 border-b border-surface-border pb-6">
+          <Link href="/" className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors mb-2">
+            <ArrowLeft className="h-4 w-4" />
+            <span>Return to Homepage</span>
+          </Link>
+          <span className="text-xs font-semibold uppercase tracking-wider text-primary-light">
+            Data Protection
+          </span>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+            Privacy Policy
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Last Updated: November 2026 • Compliant with Information Technology Act (India) and Global Data Protection Standards.
           </p>
-          <ul className="list-disc pl-5 space-y-1.5 text-xs text-gray-400">
-            <li><strong>Personal Identification Data:</strong> Full name, email address, mobile phone number, and optional organization/company name.</li>
-            <li><strong>Transaction Records:</strong> Order identifiers, purchased certification IDs, timestamps, payment gateway transaction references, and billing amounts. We <em>do not</em> store credit card numbers, CVVs, or net banking passwords; all sensitive financial data is processed directly by PCI-DSS Level 1 compliant gateways (Razorpay).</li>
-            <li><strong>Security & Audit Logs:</strong> Timestamps of voucher code reveals and IP addresses for fraud defense.</li>
-          </ul>
-        </section>
+        </div>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-white">2. How We Use Your Information</h2>
-          <p>
-            We process your data strictly to:
-          </p>
-          <ul className="list-disc pl-5 space-y-1.5 text-xs text-gray-400">
-            <li>Allocate and deliver examination vouchers into your secure customer dashboard.</li>
-            <li>Send order confirmation invoices and crucial expiry notification reminders.</li>
-            <li>Verify customer identity during voucher reveal requests to prevent unauthorized account access.</li>
-            <li>Resolve customer support tickets and communicate official exam updates.</li>
-          </ul>
-        </section>
+        {/* Content */}
+        <div className="space-y-8 text-sm text-slate-300 leading-relaxed">
+          
+          <div className="p-4 rounded-xl bg-surface-card border border-surface-border space-y-2">
+            <div className="flex items-center gap-2 text-white font-bold text-sm">
+              <Lock className="h-4 w-4 text-emerald-400" />
+              <span>Zero Selling of Customer Telemetry</span>
+            </div>
+            <p className="text-xs text-slate-300">
+              CertiVault does not sell, rent, monetize, or trade your personal email addresses, phone numbers, or certification aspirations to third-party marketing brokers.
+            </p>
+          </div>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-white">3. Data Sharing & Third Parties</h2>
-          <p>
-            We never sell, rent, or monetize candidate personal information. Data is shared exclusively with necessary infrastructure processors:
-          </p>
-          <ul className="list-disc pl-5 space-y-1.5 text-xs text-gray-400">
-            <li><strong>Razorpay:</strong> To process secure UPI, card, and net banking payments.</li>
-            <li><strong>Supabase:</strong> For encrypted database storage, authentication, and Row Level Security isolation.</li>
-            <li><strong>Resend:</strong> For transactional email confirmations and delivery notifications.</li>
-          </ul>
-        </section>
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-white">1. Information We Collect</h2>
+            <p>To fulfill your certification orders and secure your voucher vault, we collect:</p>
+            <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-slate-300">
+              <li><strong>Contact Information:</strong> Full name, verified email address, phone number, and company name (optional).</li>
+              <li><strong>Payment Transaction Telemetry:</strong> Razorpay order ID, payment method, masked card last-4, and GST billing address. (We never store full card numbers or CVVs).</li>
+              <li><strong>Account Security Telemetry:</strong> IP hash and timestamp upon voucher code reveal actions to detect unauthorized credential unmasking.</li>
+            </ul>
+          </section>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-white">4. Data Security Safeguards</h2>
-          <p>
-            CertiVault implements enterprise-grade technical safeguards including end-to-end TLS 1.3 encryption, database Row Level Security (RLS) separating customer records, and separate private database schemas preventing public leakage of voucher inventory.
-          </p>
-        </section>
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-white">2. How Your Information Is Used</h2>
+            <p>Your data is processed strictly for the following purposes:</p>
+            <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-slate-300">
+              <li>Authorizing and provisioning single-use exam vouchers to your dashboard vault.</li>
+              <li>Transmitting transactional email receipts and Pearson VUE scheduling instructions via Resend.</li>
+              <li>Complying with statutory GST tax obligations under Indian taxation law.</li>
+              <li>Assisting you with support tickets regarding voucher redemption issues.</li>
+            </ul>
+          </section>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-white">5. Your Rights & Contact</h2>
-          <p>
-            You have the right to request a copy of your personal data, update your contact information, or request account closure. For privacy inquiries, please email our Data Protection Officer at <a href="mailto:privacy@certivault.in" className="text-primary-light underline">privacy@certivault.in</a>.
-          </p>
-        </section>
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-white">3. Row Level Security & Encryption Standards</h2>
+            <p>
+              All customer database tables are governed by strict Supabase PostgreSQL Row Level Security (RLS) policies. Only your authenticated user ID can view your orders, profile coordinates, and allocations. Raw voucher codes are isolated in a restricted private database schema (<code>private.voucher_inventory</code>) inaccessible to client queries.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-bold text-white">4. Data Retention & Deletion Rights</h2>
+            <p>
+              You have the right to request an export or deletion of your account profile at any time by contacting <code>privacy@certivault.in</code>. Transactional billing records will be archived in accordance with statutory accounting requirements.
+            </p>
+          </section>
+
+        </div>
 
       </div>
-
     </div>
   );
 }

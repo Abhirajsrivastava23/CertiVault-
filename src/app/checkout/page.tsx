@@ -1,419 +1,417 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { 
   ShieldCheck, 
   Lock, 
   CreditCard, 
-  ArrowRight, 
   CheckCircle2, 
   AlertCircle, 
-  Plus, 
-  Minus,
-  Sparkles,
-  Zap,
-  Info
+  Zap, 
+  ArrowLeft,
+  Smartphone,
+  Building,
+  HelpCircle
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import { CERTIFICATIONS } from '@/lib/data/certifications';
 import { formatInr } from '@/lib/utils/formatters';
-import { Certification } from '@/lib/types';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const certIdParam = searchParams.get('certId') || CERTIFICATIONS[0].id;
+  const certId = searchParams.get('certId') || 'cert-ms-az900';
+  const initialQty = parseInt(searchParams.get('qty') || '1', 10);
 
-  const [selectedCertId, setSelectedCertId] = useState<string>(certIdParam);
-  const [quantity, setQuantity] = useState<number>(1);
-  const [customerName, setCustomerName] = useState('Arun Patel');
-  const [customerEmail, setCustomerEmail] = useState('learner@certivault.in');
+  const [quantity, setQuantity] = useState(initialQty > 0 ? initialQty : 1);
+  const [customerName, setCustomerName] = useState('Alex Morgan');
+  const [customerEmail, setCustomerEmail] = useState('alex.morgan@example.com');
   const [customerPhone, setCustomerPhone] = useState('+91 98765 43210');
-  const [companyName, setCompanyName] = useState('Apex Cloud Solutions');
-  const [gstin, setGstin] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(true);
-  const [loading, setLoading] = useState(false);
+
+  const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successOrder, setSuccessOrder] = useState<any | null>(null);
 
-  const selectedCert = CERTIFICATIONS.find((c) => c.id === selectedCertId) || CERTIFICATIONS[0];
+  // Selected payment simulation mode for sandbox
+  const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
 
-  const subtotalPaise = selectedCert.voucherPriceInr * quantity;
-  const taxPaise = 0; // Digital educational vouchers exempt or included in display price
-  const totalPaise = subtotalPaise + taxPaise;
+  const cert = CERTIFICATIONS.find((c) => c.id === certId) || CERTIFICATIONS[0];
 
-  const handleCheckout = async (e: React.FormEvent) => {
+  // Pricing calculations
+  const unitPrice = cert.voucherPriceInr;
+  const subtotal = unitPrice * quantity;
+  const taxAmount = Math.round(subtotal * 0.18); // 18% GST
+  const finalTotal = subtotal + taxAmount;
+
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
     if (!termsAccepted) {
-      setErrorMessage('You must accept the terms of service and digital delivery policy.');
+      setErrorMessage('Please accept the Terms & Conditions and Digital Delivery Policy to proceed.');
       return;
     }
 
-    setLoading(true);
-    setErrorMessage(null);
+    if (!customerEmail || !customerName || !customerPhone) {
+      setErrorMessage('Please provide complete customer contact details for voucher issuance.');
+      return;
+    }
+
+    setIsProcessing(true);
 
     try {
-      // 1. Create order on backend (Server verifies prices and stock against verified catalog)
-      const orderRes = await fetch('/api/orders/create', {
+      // Step 1: Create Order on Backend (verifies price and stock in private inventory)
+      const createRes = await fetch('/api/checkout/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: 'usr-demo-1001',
+          certificationId: cert.id,
+          quantity,
           customerName,
           customerEmail,
           customerPhone,
-          items: [
-            {
-              certificationId: selectedCert.id,
-              quantity,
+        }),
+      });
+
+      const orderData = await createRes.json();
+      if (!createRes.ok || !orderData.success) {
+        throw new Error(orderData.error || 'Failed to initialize order');
+      }
+
+      const { orderId, orderNumber, razorpayOrderId, razorpayKeyId, isSimulated } = orderData;
+
+      // Step 2: Handle Razorpay Checkout or Sandbox Simulation
+      if (!isSimulated && typeof window !== 'undefined' && window.Razorpay) {
+        // Live / Test Mode Razorpay Gateway Modal
+        const options = {
+          key: razorpayKeyId,
+          amount: orderData.amountInPaise,
+          currency: 'INR',
+          name: 'CertiVault Marketplace',
+          description: `${cert.name} Voucher (${quantity}x)`,
+          order_id: razorpayOrderId,
+          prefill: {
+            name: customerName,
+            email: customerEmail,
+            contact: customerPhone,
+          },
+          theme: {
+            color: '#3B82F6',
+          },
+          handler: async function (response: any) {
+            await verifyPayment({
+              orderId,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+              paymentMethod: 'Razorpay Gateway',
+            });
+          },
+          modal: {
+            ondismiss: function () {
+              setIsProcessing(false);
             },
-          ],
-        }),
-      });
+          },
+        };
 
-      const orderData = await orderRes.json();
-      if (!orderRes.ok || !orderData.success) {
-        throw new Error(orderData.error || 'Failed to create order on server.');
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      } else {
+        // Fast, realistic Sandbox Simulation for instant verification
+        const simulatedPaymentId = `pay_sim_${Date.now()}`;
+        const simulatedSignature = `simulated_sig_${Math.random().toString(36).substring(2)}`;
+
+        // Small realistic simulated latency
+        await new Promise((r) => setTimeout(r, 1200));
+
+        await verifyPayment({
+          orderId,
+          razorpayOrderId,
+          razorpayPaymentId: simulatedPaymentId,
+          razorpaySignature: simulatedSignature,
+          paymentMethod: selectedMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : selectedMethod === 'card' ? 'Visa / Mastercard' : 'Net Banking',
+        });
       }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An error occurred during checkout';
+      setErrorMessage(message);
+      setIsProcessing(false);
+    }
+  };
 
-      const order = orderData.order;
-
-      // 2. Initiate Razorpay order on backend
-      const rzpRes = await fetch('/api/payment/create-razorpay-order', {
+  const verifyPayment = async (payload: {
+    orderId: string;
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+    paymentMethod: string;
+  }) => {
+    try {
+      const verifyRes = await fetch('/api/checkout/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id }),
-      });
-
-      const rzpData = await rzpRes.json();
-      if (!rzpRes.ok || !rzpData.success) {
-        throw new Error(rzpData.error || 'Failed to initialize payment gateway.');
-      }
-
-      // 3. Complete payment verification (simulated / real gateway verification)
-      const verifyRes = await fetch('/api/payment/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: order.id,
-          razorpay_order_id: rzpData.razorpayOrderId,
-          razorpay_payment_id: `pay_${Math.random().toString(36).substring(2, 14)}`,
-          razorpay_signature: 'test_verified_signature',
-          isSimulation: true,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok || !verifyData.success) {
-        throw new Error(verifyData.error || 'Payment verification failed.');
+        throw new Error(verifyData.error || 'Payment verification failed');
       }
 
-      // Confetti celebration
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
-
-      setSuccessOrder(order);
-    } catch (err: any) {
-      console.error('Checkout error:', err);
-      setErrorMessage(err.message || 'Error processing payment. Please try again.');
-    } finally {
-      setLoading(false);
+      // Navigate to order success page
+      router.push(`/checkout/success?orderId=${payload.orderId}&orderNumber=${verifyData.orderNumber}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to verify payment';
+      setErrorMessage(message);
+      setIsProcessing(false);
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-      
-      {/* Title */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-          Secure Voucher Checkout
-        </h1>
-        <p className="text-xs sm:text-sm text-gray-400 mt-1">
-          Instant digital allocation to your customer dashboard upon payment verification.
-        </p>
-      </div>
-
-      {successOrder ? (
-        /* Order Success View */
-        <div className="glass-card rounded-3xl p-8 sm:p-12 border-2 border-emerald-500/40 text-center space-y-6 shadow-2xl">
-          <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-glow">
-            <CheckCircle2 className="w-8 h-8" />
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Payment Verified & Order Fulfilled!</h2>
-            <p className="text-xs sm:text-sm text-gray-300 max-w-md mx-auto">
-              Your exam voucher has been automatically allocated and secured in your vault.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-[#141B2D] border border-[#1F2B47] max-w-md mx-auto text-xs text-left space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Order Number:</span>
-              <span className="font-mono font-bold text-white">{successOrder.orderNumber}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Certification:</span>
-              <span className="font-semibold text-white">{selectedCert.name} ({selectedCert.examCode})</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Amount Paid:</span>
-              <span className="font-bold text-emerald-400">{formatInr(totalPaise)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Delivery Status:</span>
-              <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Allocated in Dashboard
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
-            <Link
-              href="/dashboard"
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-primary to-accent hover:from-primary-hover hover:to-accent-hover text-white font-bold text-xs shadow-glow flex items-center gap-2"
-            >
-              <span>View & Reveal Voucher in Dashboard</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link
-              href="/certifications"
-              className="px-5 py-3 rounded-xl bg-[#141B2D] border border-[#1F2B47] text-gray-300 font-semibold text-xs hover:text-white"
-            >
-              Back to Catalog
-            </Link>
+    <div className="py-10 bg-background min-h-screen">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        
+        {/* Navigation & Header */}
+        <div className="flex items-center justify-between border-b border-surface-border pb-4">
+          <Link href={`/certifications/${cert.slug}`} className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors">
+            <ArrowLeft className="h-4 w-4" />
+            <span>Return to {cert.name}</span>
+          </Link>
+          <div className="flex items-center gap-2 text-xs text-emerald-400">
+            <Lock className="h-3.5 w-3.5" />
+            <span>256-Bit SSL Encrypted Checkout</span>
           </div>
         </div>
-      ) : (
-        /* Standard Checkout Form */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* Left Form: Details & Billing */}
-          <form onSubmit={handleCheckout} className="lg:col-span-2 space-y-6">
+          {/* Checkout Form (7 Cols) */}
+          <div className="lg:col-span-7 space-y-6">
             
-            {/* 1. Item Selection & Quantity */}
-            <div className="glass-card rounded-2xl p-6 border border-[#1F2B47] space-y-4">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-primary-light" />
-                Selected Certification Voucher
-              </h2>
+            <form onSubmit={handlePayment} className="space-y-6">
+              
+              {/* Customer Contact Details */}
+              <div className="rounded-2xl border border-surface-border bg-surface-card p-6 space-y-4">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-full bg-primary/20 text-primary-light text-xs font-bold flex items-center justify-center">
+                    1
+                  </span>
+                  <span>Customer & Voucher Delivery Information</span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Your purchase confirmation and encrypted voucher allocation instructions will be routed to these coordinates.
+                </p>
 
-              <div className="space-y-3">
-                <div className="p-4 rounded-xl bg-[#141B2D] border border-[#1F2B47] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-primary/20 text-primary-light border border-primary/30">
-                      {selectedCert.providerName}
-                    </span>
-                    <h3 className="text-sm font-bold text-white mt-1.5">{selectedCert.name}</h3>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      Exam Code: <strong className="text-gray-200">{selectedCert.examCode}</strong> • {selectedCert.validityMonths} Mo Validity
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 self-end sm:self-auto">
-                    {/* Quantity counter */}
-                    <div className="flex items-center bg-[#0B1020] border border-[#253556] rounded-xl p-1">
-                      <button
-                        type="button"
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-[#141B2D]"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="w-8 text-center text-xs font-bold text-white">{quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => setQuantity(Math.min(5, quantity + 1))}
-                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-[#141B2D]"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-xs text-gray-400 block">Item Total</span>
-                      <span className="text-base font-bold text-white">{formatInr(subtotalPaise)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Switch certification dropdown */}
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <span>Change certification:</span>
-                  <select
-                    value={selectedCertId}
-                    onChange={(e) => setSelectedCertId(e.target.value)}
-                    className="bg-[#141B2D] border border-[#1F2B47] text-gray-200 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-primary"
-                  >
-                    {CERTIFICATIONS.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.examCode} - {c.name} ({formatInr(c.voucherPriceInr)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Candidate & Billing Details */}
-            <div className="glass-card rounded-2xl p-6 border border-[#1F2B47] space-y-4">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-accent-light" />
-                Candidate & Delivery Details
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">Candidate Full Name</label>
-                  <input
-                    type="text"
-                    required
+                <div className="space-y-3 pt-2">
+                  <Input
+                    label="Full Name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full bg-[#141B2D] border border-[#1F2B47] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">Delivery Email Address</label>
-                  <input
-                    type="email"
                     required
-                    value={customerEmail}
-                    onChange={(e) => setCustomerEmail(e.target.value)}
-                    className="w-full bg-[#141B2D] border border-[#1F2B47] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-primary"
+                    placeholder="e.g. Alex Morgan"
                   />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">Mobile Phone (for payment OTP)</label>
-                  <input
-                    type="tel"
-                    required
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full bg-[#141B2D] border border-[#1F2B47] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">Company / Organization (Optional)</label>
-                  <input
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="w-full bg-[#141B2D] border border-[#1F2B47] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-primary"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      label="Email Address"
+                      type="email"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      required
+                      placeholder="alex@company.com"
+                    />
+                    <Input
+                      label="Mobile Phone (for payment OTP)"
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      required
+                      placeholder="+91 98765 43210"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* 3. Terms & Acceptance */}
-            <div className="glass-card rounded-2xl p-6 border border-[#1F2B47] space-y-3">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  required
-                  checked={termsAccepted}
-                  onChange={(e) => setTermsAccepted(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-700 text-primary focus:ring-0 bg-[#141B2D] mt-0.5"
-                />
-                <span className="text-xs text-gray-300 leading-relaxed">
-                  I agree to the{' '}
-                  <Link href="/terms-and-conditions" className="text-primary-light underline" target="_blank">
-                    Terms & Conditions
-                  </Link>
-                  ,{' '}
-                  <Link href="/refund-policy" className="text-primary-light underline" target="_blank">
-                    Refund Policy
-                  </Link>
-                  , and understand that exam vouchers are non-refundable digital items delivered instantly upon successful payment.
-                </span>
-              </label>
-            </div>
+              {/* Payment Method Selector */}
+              <div className="rounded-2xl border border-surface-border bg-surface-card p-6 space-y-4">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-full bg-primary/20 text-primary-light text-xs font-bold flex items-center justify-center">
+                    2
+                  </span>
+                  <span>Payment Method</span>
+                </h3>
 
-            {errorMessage && (
-              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMessage}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  {[
+                    { id: 'upi', label: 'UPI / QR', desc: 'GPay, PhonePe, Paytm', icon: Smartphone },
+                    { id: 'card', label: 'Cards', desc: 'Credit / Debit Cards', icon: CreditCard },
+                    { id: 'netbanking', label: 'Net Banking', desc: '50+ Supported Banks', icon: Building },
+                  ].map((method) => {
+                    const Icon = method.icon;
+                    return (
+                      <button
+                        key={method.id}
+                        type="button"
+                        onClick={() => setSelectedMethod(method.id as any)}
+                        className={`p-3.5 rounded-xl text-left border transition-all ${
+                          selectedMethod === method.id
+                            ? 'bg-primary/10 border-primary text-white shadow-glow'
+                            : 'bg-surface-200 border-surface-border text-slate-300 hover:border-slate-600'
+                        }`}
+                      >
+                        <Icon className="h-5 w-5 text-primary-light mb-2" />
+                        <h4 className="text-xs font-bold text-white">{method.label}</h4>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{method.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="p-3 rounded-lg bg-surface-200 border border-surface-border text-xs text-slate-400 flex items-center justify-between">
+                  <span>Powered by Razorpay Secure Payments</span>
+                  <span className="text-emerald-400 font-medium">Instant Verification</span>
+                </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-accent hover:from-primary-hover hover:to-accent-hover text-white font-bold text-sm shadow-glow flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <Zap className="w-4 h-4 animate-spin" />
-                  <span>Processing Payment via Razorpay...</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-4 h-4" />
-                  <span>Pay {formatInr(totalPaise)} Securely</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
+              {/* Terms & Policies Acceptance */}
+              <div className="p-4 rounded-xl bg-surface-200 border border-surface-border space-y-3 text-xs text-slate-300">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-0.5 rounded bg-surface-50 border-surface-border text-primary focus:ring-primary h-4 w-4"
+                  />
+                  <span className="leading-relaxed">
+                    I acknowledge that certification vouchers are delivered digitally upon payment verification, have a validity of 12 months, and agree to the{' '}
+                    <Link href="/terms-and-conditions" className="text-primary-light underline" target="_blank">
+                      Terms of Service
+                    </Link>{' '}
+                    and{' '}
+                    <Link href="/refund-policy" className="text-primary-light underline" target="_blank">
+                      Refund Policy
+                    </Link>.
+                  </span>
+                </label>
+              </div>
+
+              {errorMessage && (
+                <div className="p-4 rounded-xl bg-rose-950/70 border border-rose-800/40 text-xs text-rose-300 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
               )}
-            </button>
-          </form>
 
-          {/* Right Column: Order Summary */}
-          <div className="glass-card rounded-2xl p-6 border border-[#1F2B47] space-y-4 lg:sticky lg:top-28">
-            <h3 className="text-base font-bold text-white">Order Summary</h3>
+              {/* CTA Pay Button */}
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                isLoading={isProcessing}
+                className="w-full shadow-glow text-base font-bold py-4 gap-2"
+              >
+                <Zap className="h-5 w-5" />
+                <span>Pay {formatInr(finalTotal)} Securely</span>
+              </Button>
 
-            <div className="space-y-2.5 pt-2 text-xs">
-              <div className="flex justify-between text-gray-300">
-                <span>Vouchers Subtotal ({quantity}x):</span>
-                <span className="font-semibold text-white">{formatInr(subtotalPaise)}</span>
-              </div>
-              <div className="flex justify-between text-gray-300">
-                <span>Estimated Digital Taxes (GST):</span>
-                <span className="font-semibold text-emerald-400">Included</span>
-              </div>
-              <div className="flex justify-between text-gray-300">
-                <span>Instant Delivery Fee:</span>
-                <span className="font-semibold text-emerald-400">₹0 (Free)</span>
+            </form>
+
+          </div>
+
+          {/* Order Summary (5 Cols) */}
+          <div className="lg:col-span-5 space-y-6">
+            
+            <div className="rounded-2xl border border-surface-border bg-surface-card p-6 space-y-6 shadow-xl">
+              <h3 className="text-base font-bold text-white border-b border-surface-border pb-3">
+                Order Summary
+              </h3>
+
+              {/* Item Info */}
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-primary-light">
+                      {cert.providerName}
+                    </span>
+                    <h4 className="text-sm font-bold text-white mt-0.5">{cert.name}</h4>
+                    <span className="text-xs font-mono text-slate-400">Exam Code: {cert.examCode}</span>
+                  </div>
+                  <span className="text-sm font-bold text-white whitespace-nowrap">
+                    {formatInr(unitPrice)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-surface-border/50">
+                  <span>Quantity:</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      className="h-6 w-6 rounded bg-surface-200 border border-surface-border text-white text-xs hover:bg-surface-50"
+                    >
+                      -
+                    </button>
+                    <span className="font-bold text-white px-1">{quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(Math.min(5, quantity + 1))}
+                      className="h-6 w-6 rounded bg-surface-200 border border-surface-border text-white text-xs hover:bg-surface-50"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-[#1F2B47] flex justify-between items-baseline">
-                <span className="text-sm font-bold text-white">Final Amount:</span>
-                <span className="text-2xl font-extrabold text-primary-light">{formatInr(totalPaise)}</span>
+              {/* Cost Calculation */}
+              <div className="space-y-2 pt-4 border-t border-surface-border/60 text-xs text-slate-300">
+                <div className="flex justify-between">
+                  <span>Subtotal ({quantity}x Voucher):</span>
+                  <span className="text-white font-medium">{formatInr(subtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Goods & Services Tax (GST 18%):</span>
+                  <span className="text-white font-medium">{formatInr(taxAmount)}</span>
+                </div>
+                <div className="flex justify-between text-base font-extrabold text-white pt-3 border-t border-surface-border">
+                  <span>Final Total:</span>
+                  <span className="text-primary-light text-xl">{formatInr(finalTotal)}</span>
+                </div>
               </div>
+
+              {/* Security Reassurance Box */}
+              <div className="p-3.5 rounded-xl bg-surface-200/80 border border-surface-border space-y-2 text-xs text-slate-400">
+                <div className="flex items-center gap-2 text-white font-semibold">
+                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                  <span>CertiVault Buyer Safeguard</span>
+                </div>
+                <p className="leading-relaxed">
+                  Your voucher is pre-allocated from our private inventory and held in reserved status during checkout.
+                </p>
+              </div>
+
             </div>
 
-            <div className="p-3.5 rounded-xl bg-[#141B2D] border border-[#1F2B47] text-[11px] text-gray-400 space-y-2 mt-4">
-              <div className="flex items-center gap-1.5 text-gray-200 font-semibold">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Protected by Razorpay</span>
-              </div>
-              <p className="leading-relaxed">
-                Supports UPI (GPay, PhonePe, Paytm), Net Banking, RuPay, Visa, and Mastercard with 256-bit encryption.
-              </p>
-            </div>
           </div>
 
         </div>
-      )}
 
+      </div>
     </div>
   );
 }
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={
-      <div className="max-w-5xl mx-auto px-4 py-20 text-center text-gray-400">
-        Loading secure checkout...
-      </div>
-    }>
+    <Suspense fallback={<div className="p-12 text-center text-slate-400">Loading checkout...</div>}>
       <CheckoutContent />
     </Suspense>
   );

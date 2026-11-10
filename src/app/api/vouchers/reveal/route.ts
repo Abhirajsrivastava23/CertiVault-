@@ -1,23 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { store } from '@/lib/services/store';
+import { z } from 'zod';
+import { dbStore } from '@/lib/db/store';
 
-export async function POST(req: NextRequest) {
+const revealSchema = z.object({
+  allocationId: z.string().min(1, 'Allocation ID is required'),
+  userId: z.string().optional().default('usr_demo_882910'),
+});
+
+export async function POST(request: NextRequest) {
   try {
-    const { allocationId, userId } = await req.json();
+    const body = await request.json();
+    const validated = revealSchema.safeParse(body);
 
-    if (!allocationId) {
-      return NextResponse.json({ error: 'Allocation ID is required' }, { status: 400 });
+    if (!validated.success) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid reveal request' },
+        { status: 400 }
+      );
     }
 
-    // Default to demo user if not passed (or authenticated user from session/cookies)
-    const effectiveUserId = userId || 'usr-demo-1001';
+    const { allocationId, userId } = validated.data;
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
 
-    // Verify ownership and fetch unmasked code
-    const result = store.revealVoucher(allocationId, effectiveUserId);
+    // Call atomic reveal function
+    const result = dbStore.revealVoucherCode(allocationId, userId, ip);
 
-    if (!result) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: 'Unauthorized: Voucher not found, not fulfilled, or does not belong to this account.' },
+        { success: false, error: result.error || 'Unauthorized voucher access' },
         { status: 403 }
       );
     }
@@ -25,11 +35,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       voucherCode: result.voucherCode,
-      instructions: result.instructions,
-      revealedAt: new Date().toISOString(),
+      expiryDate: result.expiryDate,
+      region: result.region,
+      redemptionInstructions: result.redemptionInstructions,
+      revealedAt: result.revealedAt,
     });
-  } catch (err: any) {
-    console.error('Error revealing voucher:', err);
-    return NextResponse.json({ error: 'Failed to reveal voucher' }, { status: 500 });
+  } catch (error) {
+    console.error('Error in /api/vouchers/reveal:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error revealing voucher' },
+      { status: 500 }
+    );
   }
 }

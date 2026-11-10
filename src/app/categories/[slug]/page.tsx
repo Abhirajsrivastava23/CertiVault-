@@ -1,98 +1,118 @@
 import React from 'react';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { ChevronRight, ArrowLeft, Layers, Compass } from 'lucide-react';
 import { CATEGORIES } from '@/lib/data/categories';
 import { CERTIFICATIONS } from '@/lib/data/certifications';
-import { CertificationCard } from '@/components/cards/CertificationCard';
-import { ChevronRight, BookOpen, ArrowLeft } from 'lucide-react';
+import { CertificationCard } from '@/components/certifications/CertificationCard';
+import { Button } from '@/components/ui/Button';
 
 interface Props {
-  params: {
-    slug: string;
-  };
+  params: Promise<{ slug: string }>;
 }
 
-export function generateStaticParams() {
+export async function generateStaticParams() {
   return CATEGORIES.map((cat) => ({
     slug: cat.slug,
   }));
 }
 
-export default function CategoryDetailPage({ params }: Props) {
-  const category = CATEGORIES.find((c) => c.slug === params.slug);
+export default async function CategoryDetailPage({ params }: Props) {
+  const { slug } = await params;
+  const category = CATEGORIES.find((c) => c.slug === slug);
 
   if (!category) {
     notFound();
   }
 
   // Certifications belonging to this category
-  const matchingCerts = CERTIFICATIONS.filter((c) => c.categorySlug === category.slug);
+  const matchingCertifications = CERTIFICATIONS.filter(
+    (c) => c.categorySlug === category.slug || c.categoryId === category.id
+  );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
-      
-      {/* Breadcrumbs */}
-      <nav className="flex items-center gap-2 text-xs text-gray-400">
-        <Link href="/" className="hover:text-white transition-colors">Home</Link>
-        <span>/</span>
-        <Link href="/categories" className="hover:text-white transition-colors">Categories</Link>
-        <span>/</span>
-        <span className="text-gray-200 font-medium">{category.name}</span>
-      </nav>
+    <div className="py-10 bg-background min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <Link href="/" className="hover:text-white transition-colors">Home</Link>
+          <ChevronRight className="h-3 w-3 text-slate-600" />
+          <Link href="/certifications" className="hover:text-white transition-colors">Categories</Link>
+          <ChevronRight className="h-3 w-3 text-slate-600" />
+          <span className="text-slate-200 font-medium">{category.name}</span>
+        </div>
 
-      {/* Category Hero Banner */}
-      <div className="glass-card rounded-3xl p-8 sm:p-12 border border-[#1F2B47] space-y-4 relative overflow-hidden">
-        <div className="max-w-3xl space-y-3">
-          <span className="text-xs font-semibold px-3 py-1 rounded-md bg-primary/20 text-primary-light border border-primary/30">
-            Technology Track
-          </span>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight">
+        {/* Category Header */}
+        <div className="rounded-2xl border border-surface-border bg-gradient-radial from-surface-100 to-navy-950 p-6 sm:p-10 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary-light">
+            <Layers className="h-4 w-4" />
+            <span>Specialization Category</span>
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
             {category.name} Certifications
           </h1>
-          <p className="text-sm sm:text-base text-gray-300 leading-relaxed">
+          <p className="text-sm sm:text-base text-slate-300 max-w-2xl leading-relaxed">
             {category.description}
           </p>
-        </div>
-      </div>
-
-      {/* Certifications in this Category */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl sm:text-2xl font-bold text-white">
-            Available Vouchers in {category.name} ({matchingCerts.length})
-          </h2>
-          <Link
-            href="/certifications"
-            className="text-xs font-semibold text-primary-light hover:underline flex items-center gap-1"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Full Catalog
-          </Link>
-        </div>
-
-        {matchingCerts.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {matchingCerts.map((cert) => (
-              <CertificationCard key={cert.id} certification={cert} />
-            ))}
+          <div className="pt-2 flex flex-wrap items-center gap-4 text-xs text-slate-400">
+            <span><strong>{matchingCertifications.length}</strong> vouchers currently available</span>
+            <span>•</span>
+            <span>100% Authorized testing partner exam delivery</span>
           </div>
-        ) : (
-          <div className="glass-card rounded-2xl p-12 text-center border border-[#1F2B47] space-y-4">
-            <BookOpen className="w-8 h-8 text-gray-400 mx-auto" />
-            <h3 className="text-base font-bold text-white">Vouchers currently restocking</h3>
-            <p className="text-xs text-gray-400 max-w-sm mx-auto">
-              We are finalizing authorized distributor allocations for upcoming exams in this track. 
-              Check our full catalog or contact candidate support for advance inquiries.
-            </p>
+        </div>
+
+        {/* Categories Bar for quick jumping */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          {CATEGORIES.map((cat) => (
             <Link
-              href="/certifications"
-              className="inline-block px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold shadow-glow"
+              key={cat.id}
+              href={`/categories/${cat.slug}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
+                cat.slug === category.slug
+                  ? 'bg-primary text-white border-primary shadow-glow'
+                  : 'bg-surface-card text-slate-400 hover:text-white border-surface-border'
+              }`}
             >
-              Browse Available Certifications
+              {cat.name}
+            </Link>
+          ))}
+        </div>
+
+        {/* Certifications List */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">
+              Available Exam Vouchers in {category.name}
+            </h2>
+            <Link href="/career-finder">
+              <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-primary-light">
+                <Compass className="h-4 w-4" />
+                <span>Need guidance choosing? Try Career Finder</span>
+              </Button>
             </Link>
           </div>
-        )}
-      </div>
 
+          {matchingCertifications.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {matchingCertifications.map((cert) => (
+                <CertificationCard key={cert.id} certification={cert} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 px-4 rounded-xl border border-surface-border bg-surface-card space-y-3">
+              <h3 className="text-base font-semibold text-white">New Vouchers Arriving Soon</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                We are actively curating additional publisher authorized inventory for {category.name}. Check back or contact support for bulk queries.
+              </p>
+              <Link href="/certifications">
+                <Button variant="secondary" size="sm">Browse All Certifications</Button>
+              </Link>
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }
