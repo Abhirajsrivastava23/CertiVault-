@@ -143,6 +143,17 @@ export function VendorLogo({ slug, className = '', size = 'md' }: VendorLogoProp
     );
   }
 
+  // Oracle
+  if (normalized.includes('oracle')) {
+    return (
+      <div className={`${currentSize} rounded-lg bg-[#2B0E0E] p-1.5 flex items-center justify-center border border-[#F80000]/40 shadow-sm shrink-0 ${className}`}>
+        <svg viewBox="0 0 24 24" className="w-full h-full">
+          <ellipse cx="12" cy="12" rx="9" ry="6" fill="none" stroke="#F80000" strokeWidth="2.8" />
+        </svg>
+      </div>
+    );
+  }
+
   // Default Fallback Logo
   return (
     <div className={`${currentSize} rounded-lg bg-surface-50 p-1.5 flex items-center justify-center border border-surface-border shadow-sm shrink-0 ${className}`}>

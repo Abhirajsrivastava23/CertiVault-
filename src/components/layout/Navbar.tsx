@@ -21,6 +21,7 @@ export function Navbar() {
   const navLinks = [
     { name: 'Home', href: '/' },
     { name: 'Certifications', href: '/certifications' },
+    { name: 'Free Vouchers', href: '/free-vouchers', badge: 'FREE' },
     { name: 'Categories', href: '/categories/cloud-computing' },
     { name: 'Career Finder', href: '/career-finder' },
     { name: 'About', href: '/about' },
@@ -72,13 +73,18 @@ export function Navbar() {
               <Link
                 key={link.name}
                 href={link.href}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${
                   isActive(link.href)
                     ? 'text-white bg-surface-50 font-semibold'
                     : 'text-slate-300 hover:text-white hover:bg-surface-50/50'
                 }`}
               >
-                {link.name}
+                <span>{link.name}</span>
+                {link.badge && (
+                  <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[9px] font-extrabold rounded-full">
+                    {link.badge}
+                  </span>
+                )}
               </Link>
             ))}
           </div>
@@ -113,13 +119,18 @@ export function Navbar() {
               key={link.name}
               href={link.href}
               onClick={() => setMobileMenuOpen(false)}
-              className={`block px-3 py-2.5 rounded-lg text-base font-medium ${
+              className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-base font-medium ${
                 isActive(link.href)
                   ? 'text-white bg-surface-50 font-semibold'
                   : 'text-slate-300 hover:text-white hover:bg-surface-50/50'
               }`}
             >
-              {link.name}
+              <span>{link.name}</span>
+              {link.badge && (
+                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-extrabold rounded-full">
+                  {link.badge}
+                </span>
+              )}
             </Link>
           ))}
           <div className="pt-4 border-t border-surface-border flex flex-col gap-2.5">

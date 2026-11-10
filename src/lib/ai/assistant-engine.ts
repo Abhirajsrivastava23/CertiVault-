@@ -38,16 +38,41 @@ export async function generateAssistantResponse(
     query === 'help'
   ) {
     return {
-      reply: `Namaste! 👋 Main **CertiVault AI Assistant** hu. Main aapko website par legitimate IT certification vouchers dhoondhne, vendor testing center (Pearson VUE / PSI) redemption samajhne, aur kisi bhi order ya payment query ko resolve karne mein help kar sakta hu.\n\nAap mujhse kisi bhi exam code (jaise **AZ-900**, **AWS SAA-C03**, **CCNA**, **Security+**), discounts, ya career guidance ke bare mein pooch sakte hain!`,
+      reply: `Namaste! 👋 Main **CertiVault AI Assistant** hu. Main aapko website par legitimate IT certification vouchers dhoondhne, vendor testing center (Pearson VUE / PSI) redemption samajhne, **100% Free Learning Quests** explore karne, aur kisi bhi order ya payment query ko resolve karne mein help kar sakta hu.\n\nAap mujhse kisi bhi exam code (jaise **AZ-900**, **AWS SAA-C03**, **CCNA**, **Security+**), Free vouchers, discounts, ya career guidance ke bare mein pooch sakte hain!`,
       actions: [
-        { label: 'Browse All Certifications', url: '/certifications', variant: 'primary' },
-        { label: 'Interactive Career Finder', url: '/career-finder', variant: 'secondary' },
+        { label: '🎁 100% Free Vouchers', url: '/free-vouchers', variant: 'primary' },
+        { label: 'Browse All Certifications', url: '/certifications', variant: 'secondary' },
       ],
       suggestedPrompts: [
+        'How to get 100% Free Vouchers?',
         'Find Best AWS Vouchers',
         'Microsoft Azure AZ-900 Price',
         'How to redeem on Pearson VUE?',
-        'Refund & Cancellation Policy',
+      ],
+    };
+  }
+
+  // 1.5. FREE VOUCHERS & LEARNING QUESTS
+  if (
+    query.includes('free') ||
+    query.includes('muft') ||
+    query.includes('bina paise') ||
+    query.includes('0 cost') ||
+    query.includes('zero cost') ||
+    query.includes('task') ||
+    query.includes('quest') ||
+    query.includes('scholarship')
+  ) {
+    return {
+      reply: `### 🎁 100% Free Certification Quests & Vouchers\n\nAap CertiVault ke **Free Vouchers** section se bina kisi kharche ke official certificates aur Pearson VUE exam fee waivers achieve kar sakte hain:\n\n1. **Microsoft Learn AI Skills Challenge**: 8 interactive micro-modules complete karein aur **AI-900 / AZ-900** ka 100% Free Pearson VUE Exam Waiver paayein *(Original Value: ₹4,800)*.\n2. **Google Cloud Generative AI Quest**: Vertex AI & prompt engineering labs complete karein aur Google Cloud Digital Credential paayein *(Value: ₹3,500)*.\n3. **Cisco Junior Cybersecurity Analyst**: Network defense virtual labs complete karein aur verified Cisco Certificate + Credly badge paayein *(Value: ₹6,500)*.\n4. **AWS Cloud Quest 3D**: Browser game mein 12 cloud tasks solve karke AWS Digital Badge earn karein.\n5. **Oracle University OCI Foundations**: Video course complete karke 100% free online proctored exam attempt paayein.\n\nKisi bhi credit card ki zaroorat nahi hai. Sabhi tasks sandbox environment mein run hote hain!`,
+      actions: [
+        { label: '🎁 Explore Free Quests & Codes', url: '/free-vouchers', variant: 'primary' },
+        { label: 'Learn on Microsoft Portal', url: 'https://learn.microsoft.com/en-us/training/challenges', variant: 'secondary' },
+      ],
+      suggestedPrompts: [
+        'How to redeem Microsoft AI-900 voucher?',
+        'Do I need a credit card for free quests?',
+        'What is Credly badge?',
       ],
     };
   }
@@ -227,3 +252,4 @@ export async function generateAssistantResponse(
     ],
   };
 }
+

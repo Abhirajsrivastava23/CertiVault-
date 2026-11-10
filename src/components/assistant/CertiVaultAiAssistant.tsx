@@ -39,14 +39,14 @@ const INITIAL_MESSAGE: Message = {
   role: 'assistant',
   content: `Namaste! 👋 Main **CertiVault AI Assistant** hu.\n\nMain aapko genuine IT exam vouchers dhoondhne, vendor discounts calculate karne, aur Pearson VUE / PSI redemption samajhne mein help kar sakta hu.\n\nAap kisi bhi exam code (jaise **AZ-900**, **AWS SAA-C03**, **CCNA**, **Security+**) ya refund policy ke bare mein pooch sakte hain!`,
   actions: [
-    { label: 'Browse All Certifications', url: '/certifications', variant: 'primary' },
-    { label: 'Interactive Career Finder', url: '/career-finder', variant: 'secondary' },
+    { label: '🎁 100% Free Vouchers', url: '/free-vouchers', variant: 'primary' },
+    { label: 'Browse All Certifications', url: '/certifications', variant: 'secondary' },
   ],
   suggestedPrompts: [
+    'How to get 100% Free Vouchers?',
     'Microsoft Azure AZ-900 Price',
     'Best AWS Cloud Voucher',
     'How to redeem on Pearson VUE?',
-    'Refund & Guarantee Policy',
   ],
   timestamp: 'Just now',
 };
@@ -342,3 +342,4 @@ export function CertiVaultAiAssistant() {
     </>
   );
 }
+
