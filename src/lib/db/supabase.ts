@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const rawAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const rawAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 /**
@@ -42,6 +44,7 @@ const safeUrl = resolveSupabaseUrl(rawUrl);
 const hasValidKey = Boolean(
   rawAnonKey &&
   rawAnonKey.trim() &&
+  rawAnonKey !== 'your-publishable-key' &&
   rawAnonKey !== 'your-anon-key' &&
   rawAnonKey !== 'demo-anon-key'
 );
