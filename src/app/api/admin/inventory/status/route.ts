@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { dbStore } from '@/lib/db/store';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const summary = dbStore.getInventorySummary();
