@@ -152,3 +152,4 @@ export function VendorLogo({ slug, className = '', size = 'md' }: VendorLogoProp
     </div>
   );
 }
+

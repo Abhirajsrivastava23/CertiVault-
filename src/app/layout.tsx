@@ -3,6 +3,7 @@ import Script from 'next/script';
 import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
+import { CertiVaultAiAssistant } from '@/components/assistant/CertiVaultAiAssistant';
 
 export const metadata: Metadata = {
   title: 'CertiVault | Authorized IT Certification Voucher Marketplace',
@@ -32,6 +33,7 @@ export default function RootLayout({
         <Navbar />
         <main className="flex-1">{children}</main>
         <Footer />
+        <CertiVaultAiAssistant />
         <Script 
           src="https://checkout.razorpay.com/v1/checkout.js" 
           strategy="lazyOnload" 
