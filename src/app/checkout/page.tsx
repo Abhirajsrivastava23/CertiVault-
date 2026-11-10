@@ -19,6 +19,7 @@ import { CERTIFICATIONS } from '@/lib/data/certifications';
 import { formatInr } from '@/lib/utils/formatters';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { RazorpayModal } from '@/components/checkout/RazorpayModal';
 
 declare global {
   interface Window {
@@ -44,6 +45,15 @@ function CheckoutContent() {
   // Selected payment simulation mode for sandbox
   const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
 
+  // Razorpay interactive modal state (for test / simulated checkout)
+  const [razorpayModalData, setRazorpayModalData] = useState<{
+    isOpen: boolean;
+    orderNumber: string;
+    orderId: string;
+    razorpayOrderId: string;
+    amountInPaise: number;
+  } | null>(null);
+
   const cert = CERTIFICATIONS.find((c) => c.id === certId) || CERTIFICATIONS[0];
 
   // Pricing calculations
@@ -51,6 +61,20 @@ function CheckoutContent() {
   const subtotal = unitPrice * quantity;
   const taxAmount = Math.round(subtotal * 0.18); // 18% GST
   const finalTotal = subtotal + taxAmount;
+
+  const loadRazorpayScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window === 'undefined') return resolve(false);
+      if (window.Razorpay) return resolve(true);
+
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +113,10 @@ function CheckoutContent() {
 
       const { orderId, orderNumber, razorpayOrderId, razorpayKeyId, isSimulated } = orderData;
 
-      // Step 2: Handle Razorpay Checkout or Sandbox Simulation
+      // Ensure Razorpay script is loaded
+      await loadRazorpayScript();
+
+      // Step 2: Handle Razorpay Checkout Modal
       if (!isSimulated && typeof window !== 'undefined' && window.Razorpay) {
         // Live / Test Mode Razorpay Gateway Modal
         const options = {
@@ -124,22 +151,21 @@ function CheckoutContent() {
         };
 
         const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (resp: any) {
+          setErrorMessage(resp.error?.description || 'Payment was not completed. Please try again.');
+          setIsProcessing(false);
+        });
         rzp.open();
       } else {
-        // Fast, realistic Sandbox Simulation for instant verification
-        const simulatedPaymentId = `pay_sim_${Date.now()}`;
-        const simulatedSignature = `simulated_sig_${Math.random().toString(36).substring(2)}`;
-
-        // Small realistic simulated latency
-        await new Promise((r) => setTimeout(r, 1200));
-
-        await verifyPayment({
+        // Open the interactive Razorpay payment modal with UPI, Card, and Net Banking options
+        setRazorpayModalData({
+          isOpen: true,
+          orderNumber,
           orderId,
           razorpayOrderId,
-          razorpayPaymentId: simulatedPaymentId,
-          razorpaySignature: simulatedSignature,
-          paymentMethod: selectedMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : selectedMethod === 'card' ? 'Visa / Mastercard' : 'Net Banking',
+          amountInPaise: orderData.amountInPaise,
         });
+        setIsProcessing(false);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'An error occurred during checkout';
@@ -156,6 +182,7 @@ function CheckoutContent() {
     paymentMethod: string;
   }) => {
     try {
+      setIsProcessing(true);
       const verifyRes = await fetch('/api/checkout/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -246,7 +273,7 @@ function CheckoutContent() {
                   <span className="h-6 w-6 rounded-full bg-primary/20 text-primary-light text-xs font-bold flex items-center justify-center">
                     2
                   </span>
-                  <span>Payment Method</span>
+                  <span>Select Payment Gateway Mode</span>
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
@@ -394,7 +421,7 @@ function CheckoutContent() {
                   <span>CertiVault Buyer Safeguard</span>
                 </div>
                 <p className="leading-relaxed">
-                  Your voucher is pre-allocated from our private inventory and held in reserved status during checkout.
+                  Your voucher is pre-allocated from our private inventory and held in reserved status during checkout. Codes remain encrypted and are revealed only upon verified payment.
                 </p>
               </div>
 
@@ -405,6 +432,27 @@ function CheckoutContent() {
         </div>
 
       </div>
+
+      {/* Interactive Razorpay Checkout Modal for UPI, Card, Net Banking */}
+      {razorpayModalData && razorpayModalData.isOpen && (
+        <RazorpayModal
+          isOpen={razorpayModalData.isOpen}
+          onClose={() => setRazorpayModalData(null)}
+          orderNumber={razorpayModalData.orderNumber}
+          orderId={razorpayModalData.orderId}
+          razorpayOrderId={razorpayModalData.razorpayOrderId}
+          amountInPaise={razorpayModalData.amountInPaise}
+          certificationName={cert.name}
+          customerName={customerName}
+          customerEmail={customerEmail}
+          customerPhone={customerPhone}
+          initialMethod={selectedMethod}
+          onPaymentSuccess={async (payload) => {
+            setRazorpayModalData(null);
+            await verifyPayment(payload);
+          }}
+        />
+      )}
     </div>
   );
 }

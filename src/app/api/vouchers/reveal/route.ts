@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { dbStore } from '@/lib/db/store';
+import { supabaseAdmin, isSupabaseConfigured } from '@/lib/db/supabase';
+
+export const dynamic = 'force-dynamic';
 
 const revealSchema = z.object({
   allocationId: z.string().min(1, 'Allocation ID is required'),
@@ -14,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     if (!validated.success) {
       return NextResponse.json(
-        { success: false, error: 'Invalid reveal request' },
+        { success: false, error: 'Invalid reveal request payload' },
         { status: 400 }
       );
     }
@@ -22,7 +25,47 @@ export async function POST(request: NextRequest) {
     const { allocationId, userId } = validated.data;
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
 
-    // Call atomic reveal function
+    // 1. Double-check order status strictly: PAYMENT MUST BE VERIFIED ('paid' or 'fulfilled')
+    const userVouchers = dbStore.getUserVouchers(userId);
+    const targetVoucher = userVouchers.find(v => v.allocationId === allocationId);
+
+    if (targetVoucher) {
+      const order = dbStore.getOrderById(targetVoucher.orderId);
+      if (!order || (order.status !== 'paid' && order.status !== 'fulfilled')) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Security Policy: Voucher code is protected and cannot be revealed until payment verification is confirmed.' 
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // 2. If Supabase is connected, check order status in Supabase database
+    if (isSupabaseConfigured && supabaseAdmin && targetVoucher) {
+      try {
+        const { data: sbOrder } = await supabaseAdmin
+          .from('orders')
+          .select('status')
+          .eq('id', targetVoucher.orderId)
+          .single();
+
+        if (sbOrder && sbOrder.status !== 'paid' && sbOrder.status !== 'fulfilled') {
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: 'Security Policy: Supabase payment status is pending. Voucher cannot be revealed.' 
+            },
+            { status: 403 }
+          );
+        }
+      } catch (sbErr) {
+        // Fall back gracefully to internal store verification
+      }
+    }
+
+    // 3. Call atomic reveal function to retrieve unmasked voucher code & record audit trail
     const result = dbStore.revealVoucherCode(allocationId, userId, ip);
 
     if (!result.success) {
