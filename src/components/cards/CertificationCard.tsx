@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Certification } from '@/lib/types';
 import { formatInr, calculateDiscount } from '@/lib/utils/formatters';
 import { ArrowUpRight, CheckCircle2, AlertCircle, Clock, ShieldCheck } from 'lucide-react';
+import { VendorLogo } from '@/components/ui/VendorLogo';
 
 interface CertificationCardProps {
   certification: Certification;
@@ -48,11 +49,14 @@ export function CertificationCard({ certification }: CertificationCardProps) {
   return (
     <div className="glass-card glass-card-hover rounded-2xl p-6 flex flex-col justify-between group border border-[#1F2B47]">
       <div>
-        {/* Top Badges */}
+        {/* Top Badges with Vendor Logo */}
         <div className="flex items-center justify-between gap-2 mb-4">
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-md border ${getProviderColor(certification.providerSlug)}`}>
-            {certification.providerName}
-          </span>
+          <div className="flex items-center gap-2">
+            <VendorLogo slug={certification.providerSlug || certification.providerName} size="sm" />
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-md border ${getProviderColor(certification.providerSlug)}`}>
+              {certification.providerName}
+            </span>
+          </div>
           <div className="flex items-center gap-1.5">
             <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${getDifficultyBadge(certification.difficultyLevel)}`}>
               {certification.difficultyLevel}
