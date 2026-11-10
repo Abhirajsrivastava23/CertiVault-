@@ -370,13 +370,51 @@ class DatabaseStore {
   }
 
   public restoreOrderFromSupabase(sbOrder: any): Order {
-    const existing = this.orders.find(o => o.id === sbOrder.id);
+    const existing = this.orders.find(o => 
+      o.id === sbOrder.id || 
+      o.orderNumber === sbOrder.order_number || 
+      (sbOrder.razorpay_order_id && o.razorpayOrderId === sbOrder.razorpay_order_id)
+    );
     if (existing) {
       existing.status = sbOrder.status;
       existing.razorpayOrderId = sbOrder.razorpay_order_id || existing.razorpayOrderId;
       existing.razorpayPaymentId = sbOrder.razorpay_payment_id || existing.razorpayPaymentId;
       existing.paymentMethod = sbOrder.payment_method || existing.paymentMethod;
       return existing;
+    }
+
+    const totalAmount = Number(sbOrder.total_amount_inr || sbOrder.total_paise || 0);
+    const taxAmount = Number(sbOrder.tax_amount_inr || sbOrder.tax_paise || 0);
+
+    const items: OrderItem[] = [];
+    if (Array.isArray(sbOrder.order_items) && sbOrder.order_items.length > 0) {
+      for (const item of sbOrder.order_items) {
+        const cert = this.getCertificationById(item.certification_id) || CERTIFICATIONS[0];
+        items.push({
+          id: item.id || crypto.randomUUID(),
+          orderId: sbOrder.id,
+          certificationId: cert.id,
+          certificationName: cert.name,
+          examCode: cert.examCode,
+          providerName: cert.providerName,
+          quantity: item.quantity || 1,
+          unitPriceInr: Number(item.unit_price_inr || item.unit_price || cert.voucherPriceInr),
+          totalPriceInr: Number(item.total_price_inr || item.total_price || cert.voucherPriceInr),
+        });
+      }
+    } else {
+      const defaultCert = CERTIFICATIONS[0];
+      items.push({
+        id: crypto.randomUUID(),
+        orderId: sbOrder.id,
+        certificationId: defaultCert.id,
+        certificationName: defaultCert.name,
+        examCode: defaultCert.examCode,
+        providerName: defaultCert.providerName,
+        quantity: 1,
+        unitPriceInr: defaultCert.voucherPriceInr,
+        totalPriceInr: defaultCert.voucherPriceInr,
+      });
     }
 
     const restoredOrder: Order = {
@@ -386,15 +424,15 @@ class DatabaseStore {
       customerName: sbOrder.customer_name,
       customerEmail: sbOrder.customer_email,
       customerPhone: sbOrder.customer_phone,
-      totalAmountInr: Number(sbOrder.total_amount_inr),
-      taxAmountInr: Number(sbOrder.tax_amount_inr || 0),
+      totalAmountInr: totalAmount,
+      taxAmountInr: taxAmount,
       status: sbOrder.status,
       razorpayOrderId: sbOrder.razorpay_order_id,
       razorpayPaymentId: sbOrder.razorpay_payment_id,
       paymentMethod: sbOrder.payment_method,
       createdAt: sbOrder.created_at,
       updatedAt: sbOrder.updated_at,
-      items: [],
+      items,
     };
 
     this.orders.unshift(restoredOrder);

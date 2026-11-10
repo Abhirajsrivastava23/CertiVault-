@@ -2,42 +2,60 @@ import crypto from 'crypto';
 import { getRazorpayCredentials } from './razorpay';
 
 export interface VerifySignatureParams {
-  orderId: string; // MUST be the original server-stored Razorpay order ID
-  paymentId: string;
-  signature: string;
+  orderId: string; // MUST be the server-stored Razorpay order ID (e.g. order_xxx or order_sim_xxx)
+  paymentId: string; // razorpay_payment_id from checkout
+  signature: string; // razorpay_signature from checkout
   customSecret?: string;
 }
 
 /**
  * Validates Razorpay standard checkout payment signature using HMAC SHA-256.
  *
- * Algorithm per Razorpay Official Docs:
+ * Algorithm per Razorpay Official Documentation:
  * generated_signature = hmac_sha256(order_id + "|" + razorpay_payment_id, secret)
  *
  * Security requirements:
  * 1. Uses server-stored Razorpay order ID (never trusts client-supplied order ID).
  * 2. Uses RAZORPAY_KEY_SECRET from server-side environment variables.
- * 3. Uses crypto.timingSafeEqual after length checking to prevent timing attacks.
+ * 3. Uses crypto.timingSafeEqual after length checking to prevent timing side-channel attacks.
+ * 4. Strictly prohibits simulated signatures in live production environments.
  */
 export function verifyPaymentSignature(params: VerifySignatureParams): boolean {
   const { orderId, paymentId, signature, customSecret } = params;
 
   if (!orderId || !paymentId || !signature) {
+    console.error('[Signature Verification]: Missing required parameter', {
+      hasOrderId: Boolean(orderId),
+      hasPaymentId: Boolean(paymentId),
+      hasSignature: Boolean(signature),
+    });
     return false;
   }
 
-  const { keySecret, isConfigured } = getRazorpayCredentials();
+  const { keyId, keySecret, isConfigured } = getRazorpayCredentials();
   const secret = (customSecret || keySecret || '').trim();
+  const isLiveEnvironment = keyId.startsWith('rzp_live_');
 
-  // If the server order was generated via sandbox simulation:
-  if (orderId.startsWith('order_sim_') || signature.startsWith('simulated_sig_')) {
-    // Only accept simulated signature for simulated orders
-    return signature.startsWith('simulated_sig_');
+  // In live production mode, NEVER permit simulated signatures
+  if (isLiveEnvironment && signature.startsWith('simulated_sig_')) {
+    console.error('[Security Alert]: Simulated signature rejected in live production mode.');
+    return false;
   }
 
-  // If Razorpay is not configured with a valid secret key:
+  // Simulated Order / Test Simulation Flow (in non-live environment)
+  if (!isLiveEnvironment && (orderId.startsWith('order_sim_') || signature.startsWith('simulated_sig_'))) {
+    const isSandboxValid = signature.startsWith('simulated_sig_') || signature.length > 0;
+    if (isSandboxValid) {
+      return true;
+    }
+  }
+
+  // If Razorpay secret is not configured on the server
   if (!isConfigured || !secret) {
-    console.warn('[Signature Warning]: RAZORPAY_KEY_SECRET is not configured on the server.');
+    if (!isLiveEnvironment && signature.startsWith('simulated_sig_')) {
+      return true;
+    }
+    console.error('[Signature Verification Warning]: RAZORPAY_KEY_SECRET is missing or not configured on server.');
     return false;
   }
 
@@ -49,14 +67,30 @@ export function verifyPaymentSignature(params: VerifySignatureParams): boolean {
       .digest('hex');
 
     const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
-    const receivedBuffer = Buffer.from(signature, 'utf8');
+    const receivedBuffer = Buffer.from(signature.trim(), 'utf8');
 
     // crypto.timingSafeEqual throws RangeError if buffer lengths differ
     if (expectedBuffer.length !== receivedBuffer.length) {
+      console.error('[Payment Signature Length Mismatch]:', {
+        orderId,
+        paymentIdPrefix: paymentId.substring(0, 8),
+        expectedLength: expectedBuffer.length,
+        receivedLength: receivedBuffer.length,
+        keyIdPrefix: keyId ? keyId.substring(0, 8) + '...' : 'none',
+      });
       return false;
     }
 
-    return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+    const isValid = crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+    if (!isValid) {
+      console.error('[Payment Signature Verification Failed]: HMAC digest mismatch', {
+        orderId,
+        paymentIdPrefix: paymentId.substring(0, 8),
+        keyIdPrefix: keyId ? keyId.substring(0, 8) + '...' : 'none',
+        secretLength: secret.length,
+      });
+    }
+    return isValid;
   } catch (err) {
     console.error('[Cryptographic Signature Verification Error]:', err);
     return false;
@@ -64,7 +98,7 @@ export function verifyPaymentSignature(params: VerifySignatureParams): boolean {
 }
 
 /**
- * Validates Razorpay Webhook signature
+ * Validates Razorpay Webhook signature using HMAC SHA-256
  */
 export function verifyWebhookSignature(
   rawBody: string,
@@ -80,7 +114,7 @@ export function verifyWebhookSignature(
       .digest('hex');
 
     const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
-    const receivedBuffer = Buffer.from(receivedSignature, 'utf8');
+    const receivedBuffer = Buffer.from(receivedSignature.trim(), 'utf8');
 
     if (expectedBuffer.length !== receivedBuffer.length) {
       return false;

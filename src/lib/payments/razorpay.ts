@@ -15,32 +15,39 @@ export function cleanEnvVar(val?: string): string {
 }
 
 /**
- * Resolves Razorpay credentials dynamically from environment variables
+ * Resolves Razorpay credentials dynamically from environment variables,
+ * checking all standard alias variations used in Vercel and local setups.
  */
 export function getRazorpayCredentials(): RazorpayCredentials {
   const keyId = cleanEnvVar(
     process.env.RAZORPAY_KEY_ID ||
-    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+    process.env.RAZORPAY_KEY
   );
 
-  const keySecret = cleanEnvVar(process.env.RAZORPAY_KEY_SECRET);
+  const keySecret = cleanEnvVar(
+    process.env.RAZORPAY_KEY_SECRET ||
+    process.env.RAZORPAY_SECRET ||
+    process.env.RAZORPAY_API_SECRET ||
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_SECRET
+  );
 
   const isConfigured = Boolean(
     keyId &&
     keySecret &&
     !keyId.includes('MOCK') &&
     !keyId.includes('demo') &&
+    !keyId.includes('YourTestKeyId') &&
     !keySecret.includes('your_razorpay') &&
-    keyId.startsWith('rzp_')
+    !keySecret.includes('placeholder') &&
+    (keyId.startsWith('rzp_test_') || keyId.startsWith('rzp_live_') || keyId.startsWith('rzp_'))
   );
 
   return { keyId, keySecret, isConfigured };
 }
 
-export const RAZORPAY_KEY_ID = cleanEnvVar(
-  process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID
-);
-export const RAZORPAY_KEY_SECRET = cleanEnvVar(process.env.RAZORPAY_KEY_SECRET);
+export const RAZORPAY_KEY_ID = getRazorpayCredentials().keyId;
+export const RAZORPAY_KEY_SECRET = getRazorpayCredentials().keySecret;
 export const isRazorpayConfigured = getRazorpayCredentials().isConfigured;
 
 /**

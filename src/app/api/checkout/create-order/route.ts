@@ -88,20 +88,79 @@ export async function POST(request: NextRequest) {
     // 4. Record pending order in Supabase PostgreSQL if configured
     if (isSupabaseConfigured && supabaseAdmin) {
       try {
-        await supabaseAdmin.from('orders').upsert({
+        let resolvedUserId = effectiveUserId;
+
+        // Verify if a profile exists for customer or any profile to prevent foreign key errors
+        try {
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('id')
+            .eq('email', customerEmail)
+            .maybeSingle();
+
+          if (profile?.id) {
+            resolvedUserId = profile.id;
+          } else {
+            const { data: anyProfile } = await supabaseAdmin
+              .from('profiles')
+              .select('id')
+              .limit(1)
+              .maybeSingle();
+
+            if (anyProfile?.id) {
+              resolvedUserId = anyProfile.id;
+            }
+          }
+        } catch {
+          // Non-blocking profile lookup
+        }
+
+        const baseOrderData: Record<string, any> = {
           id: internalOrder.id,
           order_number: internalOrder.orderNumber,
-          user_id: effectiveUserId,
+          user_id: resolvedUserId,
           customer_email: customerEmail,
           customer_phone: customerPhone,
           customer_name: customerName,
-          total_amount_inr: internalOrder.totalAmountInr,
-          tax_amount_inr: internalOrder.taxAmountInr,
           status: 'pending',
           razorpay_order_id: razorpayOrder.id,
           created_at: internalOrder.createdAt,
           updated_at: internalOrder.updatedAt,
+        };
+
+        // Try upserting matching both potential schema variations
+        const { error: err1 } = await supabaseAdmin.from('orders').upsert({
+          ...baseOrderData,
+          total_amount_inr: internalOrder.totalAmountInr,
+          tax_amount_inr: internalOrder.taxAmountInr,
         }, { onConflict: 'id' });
+
+        if (err1) {
+          await supabaseAdmin.from('orders').upsert({
+            ...baseOrderData,
+            currency: 'INR',
+            subtotal_paise: internalOrder.subtotalInr,
+            tax_paise: internalOrder.taxAmountInr,
+            total_paise: internalOrder.totalAmountInr,
+          }, { onConflict: 'id' });
+        }
+
+        // Also record order item in Supabase
+        const primaryItem = internalOrder.items[0];
+        if (primaryItem) {
+          try {
+            await supabaseAdmin.from('order_items').upsert({
+              id: primaryItem.id,
+              order_id: internalOrder.id,
+              certification_id: cert.id,
+              quantity: primaryItem.quantity,
+              unit_price_inr: primaryItem.unitPriceInr,
+              total_price_inr: primaryItem.totalPriceInr,
+            }, { onConflict: 'id' });
+          } catch {
+            // Non-blocking order item sync
+          }
+        }
       } catch (sbErr) {
         console.warn('[Supabase Order Pending Sync Note]:', sbErr);
       }

@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { store } from '@/lib/services/store';
+import { dbStore } from '@/lib/db/store';
+import { createRazorpayOrder, getRazorpayCredentials } from '@/lib/payments/razorpay';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,58 +14,38 @@ export async function POST(req: NextRequest) {
     }
 
     const order = store.getOrder(orderId);
-    if (!order) {
+    const dbOrder = dbStore.getOrderById(orderId);
+
+    if (!order && !dbOrder) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const amountInPaise = order?.totalAmountInr || dbOrder?.totalAmountInr || 100000;
+    const orderNumber = order?.orderNumber || dbOrder?.orderNumber || orderId;
+    const customerEmail = order?.customerEmail || dbOrder?.customerEmail || 'customer@example.com';
 
-    // Check if live Razorpay credentials exist and are not default placeholder
-    if (keyId && keySecret && !keyId.includes('demo') && !keyId.includes('YourTestKeyId')) {
-      try {
-        const Razorpay = (await import('razorpay')).default;
-        const razorpayInstance = new Razorpay({
-          key_id: keyId,
-          key_secret: keySecret,
-        });
+    const razorpayOrder = await createRazorpayOrder({
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: orderNumber,
+      notes: {
+        orderId: order?.id || dbOrder?.id || orderId,
+        customerEmail,
+      },
+    });
 
-        const rzpOrder = await razorpayInstance.orders.create({
-          amount: order.totalAmountInr, // in paise
-          currency: 'INR',
-          receipt: order.orderNumber,
-          notes: {
-            orderId: order.id,
-            customerEmail: order.customerEmail,
-          },
-        });
+    if (order) order.razorpayOrderId = razorpayOrder.id;
+    if (dbOrder) dbOrder.razorpayOrderId = razorpayOrder.id;
 
-        order.razorpayOrderId = rzpOrder.id;
-
-        return NextResponse.json({
-          success: true,
-          razorpayOrderId: rzpOrder.id,
-          amount: rzpOrder.amount,
-          currency: rzpOrder.currency,
-          keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || keyId,
-          isSimulation: false,
-        });
-      } catch (rzpErr: any) {
-        console.warn('Razorpay SDK failed or not reachable, falling back to secure test order flow:', rzpErr.message);
-      }
-    }
-
-    // Secure Test/Mock Order generation for test environments
-    const mockOrderId = `order_${Math.random().toString(36).substring(2, 14)}`;
-    order.razorpayOrderId = mockOrderId;
+    const { keyId } = getRazorpayCredentials();
 
     return NextResponse.json({
       success: true,
-      razorpayOrderId: mockOrderId,
-      amount: order.totalAmountInr,
-      currency: 'INR',
-      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_certivault2026',
-      isSimulation: true,
+      razorpayOrderId: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      keyId: keyId || 'rzp_test_MOCK_DEMO_KEY',
+      isSimulation: razorpayOrder.isSimulated ?? false,
     });
   } catch (err: any) {
     console.error('Error creating Razorpay order:', err);
